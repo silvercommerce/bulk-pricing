@@ -22,6 +22,10 @@ class BulkPricingBracket extends DataObject implements TaxableProvider
 
     private static $table_name = 'BulkPricingBracket';
 
+    private static $singular_name = "Bulk Pricing Bracket";
+
+    private static $plural_name = "Bulk Pricing Brackets";
+
     /**
      * Should bulk pricing brackets allow negative numbers?
      * Defaults to false, if a negative number appears, it is
@@ -77,6 +81,11 @@ class BulkPricingBracket extends DataObject implements TaxableProvider
             $request = Injector::inst()->get(HTTPRequest::class);
             MigrateLegacyBracketsTask::create()->run($request);
         }
+    }
+
+    public function getName()
+    {
+        return $this->i18n_singular_name();
     }
 
     /**
