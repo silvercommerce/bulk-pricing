@@ -12,6 +12,7 @@ use SilverCommerce\BulkPricing\Model\BulkPricingGroup;
 use Symbiote\GridFieldExtensions\GridFieldTitleHeader;
 use SilverStripe\Forms\GridField\GridFieldDeleteAction;
 use SilverCommerce\BulkPricing\Model\BulkPricingBracket;
+use SilverStripe\Dev\Deprecation;
 use SilverStripe\Forms\GridField\GridFieldToolbarHeader;
 use SilverStripe\ORM\ArrayList;
 use Symbiote\GridFieldExtensions\GridFieldEditableColumns;
@@ -32,7 +33,8 @@ class BulkPricingProduct extends DataExtension
     ];
 
     private static $casting = [
-        'PricingBracketsList' => 'Text'
+        'PricingBracketsList' => 'Text',
+        'PricingTable' => 'HTMLText'
     ];
 
     public function updateExportFields(&$fields)
@@ -70,12 +72,19 @@ class BulkPricingProduct extends DataExtension
     }
 
     /**
-     * Generate a list of directly attached pricing brackets to this product
+     * Generate a list of directly attached pricing brackets
+     * to this product
+     * 
+     * @return string
      */
     public function getPricingBracketsList()
     {
         $items = [];
-        foreach ($this->getOwner()->PricingBrackets() as $bracket) {
+        $brackets = $this
+            ->getOwner()
+            ->PricingBrackets();
+
+        foreach ($brackets as $bracket) {
             $string = "MinQTY:" . $bracket->MinQTY . ";";
             $string .= "MaxQTY:" . $bracket->MaxQTY . ";";
             $string .= "Price:" . $bracket->Price . ";";
@@ -87,15 +96,16 @@ class BulkPricingProduct extends DataExtension
     }
 
     /**
-     * Get a list of valid pricing brackets for this product. If a quantity is provided,
-     * then can also filter by that.
+     * Get a list of valid pricing brackets for this product.
+     * If a quantity is provided, then filter by it.
      *
      * @return \SilverStripe\ORM\SS_List
      */
-    public function getValidPricingBrackets($qty = null)
+    public function getValidPricingBrackets(int $qty = null)
     {
         $filter = [];
         $owner = $this->getOwner();
+        $brackets = null;
 
         if (is_int($qty)) {
             $filter['MinQTY:LessThanOrEqual'] = $qty;
@@ -103,8 +113,10 @@ class BulkPricingProduct extends DataExtension
         }
 
         // Does this product have a bulk price directly assigned?
-        if (count($filter)) {
-            $brackets = $owner->PricingBrackets()->filter($filter);
+        if (count($filter) > 0) {
+            $brackets = $owner
+                ->PricingBrackets()
+                ->filter($filter);
         } else {
             $brackets = $owner->PricingBrackets();
         }
@@ -119,7 +131,7 @@ class BulkPricingProduct extends DataExtension
          *
          * @var BulkPricingGroup
          */
-        $group = $this->getOwner()->getPricingGroup();
+        $group = $owner->getPricingGroup();
         $brackets = ArrayList::create();
 
         if ($group->exists()) {
@@ -128,7 +140,7 @@ class BulkPricingProduct extends DataExtension
 
             // Attach products to the list as temp products
             foreach ($list as $bracket) {
-                $bracket->setTempProduct($this->getOwner());
+                $bracket->setTempProduct($owner);
                 $brackets->add($bracket);
             }
         }
@@ -142,10 +154,10 @@ class BulkPricingProduct extends DataExtension
      *
      * @return BulkPricingGroup
      */
-    public function getPricingGroup()
+    public function getPricingGroup(): BulkPricingGroup
     {
         $owner = $this->getOwner();
-        
+
         // First try and get a group directly
         $group = $owner->PricingGroup();
 
@@ -164,8 +176,9 @@ class BulkPricingProduct extends DataExtension
             );
         }
 
-        if (count($category_ids)) {
-            $group = BulkPricingGroup::get()->find("Category.ID", $category_ids);
+        if (count($category_ids) > 0) {
+            $group = BulkPricingGroup::get()
+                ->find("Category.ID", $category_ids);
         }
 
         // If group is empty, setup a non existing one
@@ -175,6 +188,21 @@ class BulkPricingProduct extends DataExtension
         }
 
         return $group;
+    }
+
+    /**
+     * Get a rendered pricing table for this Product
+     *
+     * @return string
+     */
+    public function getPricingTable()
+    {
+        return $this
+            ->getOwner()
+            ->renderWith(
+                'SilverCommerce\\BulkPricing\\Includes\\PricingTable',
+                ['Product' => $this->getOwner()]
+            );
     }
 
     /**
@@ -191,6 +219,8 @@ class BulkPricingProduct extends DataExtension
      */
     public function getBulkPrice(int $qty)
     {
+        Deprecation::notice(3, 'getBulkPrice is no longer needed');
+
         $owner = $this->getOwner();
         $price = $owner->getBasePrice();
         $brackets = $this->getValidPricingBrackets($qty);
@@ -202,20 +232,5 @@ class BulkPricingProduct extends DataExtension
         }
 
         return (float) $price;
-    }
-
-    /**
-     * Get a rendered pricing table for this Product
-     *
-     * @return string
-     */
-    public function getPricingTable()
-    {
-        return $this
-            ->getOwner()
-            ->renderWith(
-                'SilverCommerce\\BulkPricing\\Includes\\PricingTable',
-                ['Product' => $this->getOwner()]
-            );
     }
 }
