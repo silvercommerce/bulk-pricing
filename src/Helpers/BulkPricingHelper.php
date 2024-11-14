@@ -2,6 +2,7 @@
 
 namespace SilverCommerce\BulkPricing\Helpers;
 
+use phpDocumentor\Reflection\DocBlock\Tags\Var_;
 use SilverCommerce\BulkPricing\Model\BulkPricingBracket;
 use SilverStripe\Core\Injector\Injectable;
 use SilverCommerce\OrdersAdmin\Model\LineItem;
@@ -17,31 +18,26 @@ class BulkPricingHelper implements LineItemPricable
     use Injectable;
 
     /**
-     * Modify a provided price based on the current bracket settings
+     * Find how much to modify the base price
+     * based on the current bracket
      *
      * @param float $price
      *
      * @return float
      */
-    protected function getPriceModifier(
+    protected function getModificationAmount(
         BulkPricingBracket $bracket,
         float $price
     ): float {
-        $allow_negative = Config::inst()->get(
-            BulkPricingBracket::class,
-            'allow_negative'
-        );
         $modify = 0;
 
-        if ($bracket->Reduce == true
-            && !$allow_negative
-            && $bracket->Price > $price
-        ) {
-            $modify = 0 - $price;
-        } elseif ($bracket->Reduce == true) {
+        // If we are to reduce the price, pass the reduction amount,
+        // else pass a modifier generated from the new price from the
+        // bracket
+        if ($bracket->Reduce == true) {
             $modify = 0 - $bracket->Price;
         } else {
-            $modify = $bracket->Price;
+            $modify = 0 - $price + $bracket->Price;
         }
 
         return $modify;
@@ -53,8 +49,8 @@ class BulkPricingHelper implements LineItemPricable
             ->filter('LineItem.ID', $item->ID);
 
         foreach ($modifiers as $modifier) {
-            if ($modifier instanceof BulkPricingBracket) {
-                $modifier->remove();
+            if ($modifier->RelatedObject() instanceof BulkPricingBracket) {
+                $modifier->delete();
             }
         }
 
@@ -65,6 +61,7 @@ class BulkPricingHelper implements LineItemPricable
     {
         /** @var LineItem */
         $item = $factory->getItem();
+
         $qty = $item->Quantity;
         /** @var CatalogueProduct */
         $product = $item->FindStockItem();
@@ -83,7 +80,7 @@ class BulkPricingHelper implements LineItemPricable
             return $item;
         }
 
-        $modify = $this->getPriceModifier(
+        $modify = $this->getModificationAmount(
             $bracket,
             $product->getBasePrice()
         );
